@@ -1,0 +1,152 @@
+﻿@page "/ManageTransactionTypes"
+
+@using System.ComponentModel.DataAnnotations
+@using System.Text.RegularExpressions
+
+@inject ISnackbar Snackbar
+@inject ApplicationDbContext DbContext
+@inject IAppState AppState
+
+
+<h3>Manage Transaction Types</h3>
+
+<MudExpansionPanels Class="mb-4" Elevation="1">
+    <MudExpansionPanel Text="Create Transaction Type">
+        <MudForm @bind-IsValid="@success">
+            <MudTextField T="string" @bind-Value=NewTransType.Code Label="Code" MaxLength="3" Required="true" RequiredError="Code is required!" />
+            <MudTextField T="string" @bind-Value=NewTransType.Title Label="Title" Required="true" RequiredError="Title is required!" />            
+            <div class="d-flex align-center justify-space-between mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!success)" Class="ml-auto" OnClick="async () => await CreateTransactionType()">CREATE</MudButton>
+            </div>
+        </MudForm>
+    </MudExpansionPanel>
+</MudExpansionPanels>
+
+<MudTable Items="@TransactionTypes" Dense="@dense" Hover="@hover" ReadOnly="@ronly" CanCancelEdit="@canCancelEdit" Filter="new Func<TransactionType,bool>(FilterFunc)"
+          @bind-SelectedItem="selectedItem1" SortLabel="Sort By" CommitEditTooltip="Commit Edit"
+          OnCommitEditClick="@(() => Snackbar.Add("Commit Edit Handler Invoked"))" RowEditPreview="BackupItem" RowEditCancel="ResetItemToOriginalValues"
+          RowEditCommit="ItemHasBeenCommitted" IsEditRowSwitchingBlocked="@blockSwitch" ApplyButtonPosition="@applyButtonPosition" EditButtonPosition="@editButtonPosition" EditTrigger="@editTrigger">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Transaction Types</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <ColGroup>
+        @if (applyButtonPosition.DisplayApplyButtonAtStart() || (editButtonPosition.DisplayEditButtonAtStart() && editTrigger == TableEditTrigger.EditButton))
+        {
+            <col style="width:50px;" />
+        }
+        <col style="width:50px;" />
+        <col style="width:80px;" />
+        <col style="width:50%;" />
+        <col />
+        <col />
+        @if (applyButtonPosition.DisplayApplyButtonAtEnd() || (editButtonPosition.DisplayEditButtonAtEnd() && editTrigger == TableEditTrigger.EditButton))
+        {
+            <col style="width:50px;" />
+        }
+    </ColGroup>
+    <HeaderContent>
+        <MudTh><MudTableSortLabel SortBy="new Func<TransactionType, object>(x=>x.Code)">Code</MudTableSortLabel></MudTh>
+        <MudTh><MudTableSortLabel SortBy="new Func<TransactionType, object>(x=>x.Title)">Title</MudTableSortLabel></MudTh>        
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Code">@context.Code</MudTd>
+        <MudTd DataLabel="Title">@context.Title</MudTd>
+    </RowTemplate>
+    <RowEditingTemplate>
+        <MudTd DataLabel="Code">
+            <MudTextField @bind-Value="@context.Code" Required />
+        </MudTd>
+        <MudTd DataLabel="Title">
+            <MudTextField @bind-Value="@context.Title" Required />
+        </MudTd>
+    </RowEditingTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+    <EditButtonContent Context="button">
+        <MudIconButton Size="@Size.Small" Icon="@Icons.Material.Outlined.Edit" Class="pa-0" OnClick="@button.ButtonAction" Disabled="@button.ButtonDisabled" />
+    </EditButtonContent>
+</MudTable>
+
+@code {
+    bool success;
+
+    private TransactionType NewTransType = new TransactionType();
+    private List<string> editEvents = new();
+    private bool dense = false;
+    private bool hover = true;
+    private bool ronly = false;
+    private bool canCancelEdit = false;
+    private bool blockSwitch = false;
+    private string searchString = "";
+    private TransactionType selectedItem1 = null;
+    private TransactionType TransactionTypeBeforeEdit;
+    private HashSet<TransactionType> selectedItems1 = new HashSet<TransactionType>();
+    private TableApplyButtonPosition applyButtonPosition = TableApplyButtonPosition.End;
+    private TableEditButtonPosition editButtonPosition = TableEditButtonPosition.End;
+    private TableEditTrigger editTrigger = TableEditTrigger.RowClick;
+    private IEnumerable<TransactionType> TransactionTypes = new List<TransactionType>();
+
+    protected override void OnInitialized()
+    {
+        TransactionTypes = DbContext.TransactionTypes;
+    }
+
+    private void ClearEventLog()
+    {
+        editEvents.Clear();
+    }
+
+    private void AddEditionEvent(string message)
+    {
+        editEvents.Add(message);
+        StateHasChanged();
+    }
+
+    private void BackupItem(object TransactionType)
+    {
+        TransactionTypeBeforeEdit = new()
+            {
+                Code = ((TransactionType)TransactionType).Code,
+                Title = ((TransactionType)TransactionType).Title,
+            };
+        AddEditionEvent($"RowEditPreview event: made a backup of TransactionType {((TransactionType)TransactionType).Title}");
+    }
+
+    private void ItemHasBeenCommitted(object TransactionType)
+    {
+        AddEditionEvent($"RowEditCommit event: Changes to TransactionType {((TransactionType)TransactionType).Title} committed");
+    }
+
+    private void ResetItemToOriginalValues(object TransactionType)
+    {
+        ((TransactionType)TransactionType).Code = TransactionTypeBeforeEdit.Code;
+        ((TransactionType)TransactionType).Title = TransactionTypeBeforeEdit.Title;
+        AddEditionEvent($"RowEditCancel event: Editing of TransactionType {((TransactionType)TransactionType).Title} canceled");
+    }
+
+    private bool FilterFunc(TransactionType TransactionType)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (TransactionType.Code.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (TransactionType.Title.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if ($"{TransactionType.Code} {TransactionType.Title}".Contains(searchString))
+            return true;
+        return false;
+    }
+
+    private async Task CreateTransactionType()
+    {
+        this.NewTransType.CreatedDate = DateTime.Now;
+        this.NewTransType.UpdatedDate = DateTime.Now;
+        this.NewTransType.UserId = await AppState.GetCurrentUser();
+        await this.DbContext.TransactionTypes.AddAsync(this.NewTransType);
+        await this.DbContext.SaveChangesAsync();
+        Snackbar.Add("Added new transaction type", Severity.Success);
+    }
+}
